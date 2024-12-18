@@ -132,4 +132,66 @@ public class PopupController {
     // You can implement additional logic to handle the selected date and time
     // For example, if you need to return the selected values to the main window
 }
+--------------------------------------
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.scene.layout.VBox?>
+<?import javafx.scene.control.DatePicker?>
+<?import javafx.scene.control.ComboBox?>
+<?import javafx.scene.control.Button?>
+<?import javafx.collections.FXCollections?>
+
+<VBox xmlns:fx="http://javafx.com/fxml" fx:controller="com.example.PopupController" spacing="10" style="-fx-padding: 20;">
+    <!-- DatePicker for calendar selection -->
+    <DatePicker fx:id="datePicker"/>
+    
+    <!-- ComboBox for time selection -->
+    <ComboBox fx:id="timePicker" items="${timeOptions}" />
+
+    <!-- Button to close the popup -->
+    <Button fx:id="closeButton" text="Close" onAction="#closePopup"/>
+</VBox>
+---------------------------------------------------
+
+package com.example;
+
+import javafx.fxml.FXML;
+import javafx.scene.control.DatePicker;
+import javafx.scene.control.ComboBox;
+import javafx.scene.control.Button;
+import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
+import javafx.stage.Stage;
+
+public class PopupController {
+
+    @FXML
+    private DatePicker datePicker;  // DatePicker for selecting the date
+
+    @FXML
+    private ComboBox<String> timePicker;  // ComboBox for selecting the time
+
+    @FXML
+    private Button closeButton;  // Button to close the popup
+
+    // Define the ObservableList for time options
+    private ObservableList<String> timeOptions = FXCollections.observableArrayList(
+        "08:00 AM", "09:00 AM", "10:00 AM", "11:00 AM", "12:00 PM",
+        "01:00 PM", "02:00 PM", "03:00 PM", "04:00 PM"
+    );
+
+    @FXML
+    private void initialize() {
+        // Set the time options to the ComboBox
+        timePicker.setItems(timeOptions);
+    }
+
+    // Method to close the popup when the "Close" button is clicked
+    @FXML
+    private void closePopup() {
+        // Close the popup window
+        Stage stage = (Stage) closeButton.getScene().getWindow();
+        stage.close();
+    }
+}
+
 
