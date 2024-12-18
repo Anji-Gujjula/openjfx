@@ -8,6 +8,27 @@ MainView.fxml
     <!-- NewSession Button to trigger the popup -->
     <Button fx:id="newSessionButton" text="New Session" layoutX="100" layoutY="100" onAction="#openPopup"/>
 </AnchorPane>
+------------------------------------------------------------
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.control.Button?>
+
+<HBox xmlns:fx="http://javafx.com/fxml" fx:controller="com.example.MainController" spacing="10" alignment="CENTER">
+    <!-- NewSession Button to trigger the popup -->
+    <Button fx:id="newSessionButton" text="New Session" onAction="#openPopup"/>
+</HBox>
+-----------------------------------------------------------------------
+
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.scene.layout.VBox?>
+<?import javafx.scene.control.Button?>
+
+<VBox xmlns:fx="http://javafx.com/fxml" fx:controller="com.example.MainController" spacing="10" alignment="CENTER">
+    <!-- NewSession Button to trigger the popup -->
+    <Button fx:id="newSessionButton" text="New Session" onAction="#openPopup"/>
+</VBox>
+
+
 
 package com.example;
 
