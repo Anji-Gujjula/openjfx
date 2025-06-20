@@ -1,11 +1,36 @@
+// Method overload for single message
 @Override
-public Integer postDisplayMessage(String buttonText, String loginId) {
+public Integer postDisplayMessage(String message, String loginId) {
+    LOGGER.log(Level.INFO, "ENTER postDisplayMessage (single message) with message: {0}, loginId: {1}", 
+               new Object[]{message, loginId});
+    
+    // Convert single message to list and call the main method
+    List<String> messageList = new ArrayList<>();
+    if (message != null && !message.trim().isEmpty()) {
+        messageList.add(message);
+    }
+    
+    Integer result = postDisplayMessages(messageList, loginId);
+    
+    LOGGER.log(Level.INFO, "EXIT postDisplayMessage (single message) with result: {0}", result);
+    return result;
+}
 
-    LOGGER.log(Level.INFO, "ENTER postDisplayMessage with buttonText: {0}, loginId: {1}", 
-               new Object[]{buttonText, loginId});
+// Method overload for list of messages
+@Override
+public Integer postDisplayMessages(List<String> messageList, String loginId) {
+
+    LOGGER.log(Level.INFO, "ENTER postDisplayMessages with messageList size: {0}, loginId: {1}", 
+               new Object[]{messageList != null ? messageList.size() : 0, loginId});
+
+    // Validate input parameters
+    if (messageList == null || messageList.isEmpty()) {
+        LOGGER.log(Level.WARNING, "Message list is null or empty for loginId: {0}", loginId);
+        return null;
+    }
 
     Integer boardId = null;
-    Integer messageDetailId = null;
+    List<Integer> messageDetailIds = new ArrayList<>();
     LinkedHashMap<Integer, Object> parametersSet;
     Integer position;
     Timestamp userLogLoginTime = null;
@@ -185,61 +210,101 @@ public Integer postDisplayMessage(String buttonText, String loginId) {
             }
         }
 
-        // Step 4: Insert button message in child table
+        // Step 4: Insert all messages from the list in child table as separate records
         if (boardId != null) {
-            LOGGER.log(Level.INFO, "Inserting button message for BOARD_ID: {0} - sql: {1}", 
-                      new Object[]{boardId, sqlInsertMessage.toString().replaceAll("\\s+", " ")});
+            LOGGER.log(Level.INFO, "Inserting {0} message(s) for BOARD_ID: {1}", 
+                      new Object[]{messageList.size(), boardId});
             
-            parametersSet = new LinkedHashMap<>();
-            position = 1;
-            parametersSet.put(position++, boardId);
-            parametersSet.put(position++, buttonText);
-            DBHelper.setParametersFromMap(pStmtInsertMessage, parametersSet);
+            int successfulInserts = 0;
+            int messageCounter = 1;
             
-            int messageInsertCount = pStmtInsertMessage.executeUpdate();
-            
-            if (messageInsertCount > 0) {
-                LOGGER.log(Level.INFO, "Button message inserted successfully for BOARD_ID: {0}, Message: {1}", 
-                          new Object[]{boardId, buttonText});
-                
-                // Optional: Get the message_detail_id if needed
-                String sqlGetMessageId = "SELECT MESSAGE_DETAIL_ID FROM AVS.DISPLAY_BOARD_MSG_DETAIL_TBL " +
-                                       "WHERE BOARD_ID = ? AND DISPLAY_MESSAGE = ? " +
-                                       "ORDER BY DISPLAY_MESSAGE_DATE_TIME DESC FETCH FIRST 1 ROWS ONLY";
-                
-                try (PreparedStatement pStmtGetMessageId = conn.prepareStatement(sqlGetMessageId)) {
+            for (String message : messageList) {
+                if (message != null && !message.trim().isEmpty()) {
+                    LOGGER.log(Level.INFO, "Inserting message {0}/{1} for BOARD_ID: {2} - Message: {3}", 
+                              new Object[]{messageCounter, messageList.size(), boardId, message});
+                    
                     parametersSet = new LinkedHashMap<>();
                     position = 1;
                     parametersSet.put(position++, boardId);
-                    parametersSet.put(position++, buttonText);
-                    DBHelper.setParametersFromMap(pStmtGetMessageId, parametersSet);
+                    parametersSet.put(position++, message.trim());
+                    DBHelper.setParametersFromMap(pStmtInsertMessage, parametersSet);
                     
-                    try (ResultSet rs = pStmtGetMessageId.executeQuery()) {
-                        if (rs.next()) {
-                            messageDetailId = rs.getInt("MESSAGE_DETAIL_ID");
-                            LOGGER.log(Level.INFO, "Message stored with MESSAGE_DETAIL_ID: {0}", messageDetailId);
+                    int messageInsertCount = pStmtInsertMessage.executeUpdate();
+                    
+                    if (messageInsertCount > 0) {
+                        successfulInserts++;
+                        LOGGER.log(Level.INFO, "Message {0} inserted successfully for BOARD_ID: {1}", 
+                                  new Object[]{messageCounter, boardId});
+                        
+                        // Optional: Get the message_detail_id for each inserted message
+                        String sqlGetMessageId = "SELECT MESSAGE_DETAIL_ID FROM AVS.DISPLAY_BOARD_MSG_DETAIL_TBL " +
+                                               "WHERE BOARD_ID = ? AND DISPLAY_MESSAGE = ? " +
+                                               "ORDER BY DISPLAY_MESSAGE_DATE_TIME DESC FETCH FIRST 1 ROWS ONLY";
+                        
+                        try (PreparedStatement pStmtGetMessageId = conn.prepareStatement(sqlGetMessageId)) {
+                            parametersSet = new LinkedHashMap<>();
+                            position = 1;
+                            parametersSet.put(position++, boardId);
+                            parametersSet.put(position++, message.trim());
+                            DBHelper.setParametersFromMap(pStmtGetMessageId, parametersSet);
+                            
+                            try (ResultSet rs = pStmtGetMessageId.executeQuery()) {
+                                if (rs.next()) {
+                                    Integer messageDetailId = rs.getInt("MESSAGE_DETAIL_ID");
+                                    messageDetailIds.add(messageDetailId);
+                                    LOGGER.log(Level.INFO, "Message {0} stored with MESSAGE_DETAIL_ID: {1}", 
+                                              new Object[]{messageCounter, messageDetailId});
+                                }
+                            }
                         }
+                    } else {
+                        LOGGER.log(Level.WARNING, "Failed to insert message {0} for BOARD_ID: {1} - Message: {2}", 
+                                  new Object[]{messageCounter, boardId, message});
                     }
+                } else {
+                    LOGGER.log(Level.WARNING, "Skipping null or empty message at position {0}", messageCounter);
                 }
-            } else {
-                LOGGER.log(Level.WARNING, "Failed to insert button message for BOARD_ID: {0}", boardId);
+                messageCounter++;
             }
+            
+            LOGGER.log(Level.INFO, "Message insertion completed. Successfully inserted {0} out of {1} message(s) for BOARD_ID: {2}", 
+                      new Object[]{successfulInserts, messageList.size(), boardId});
+            
+            if (successfulInserts == 0) {
+                LOGGER.log(Level.WARNING, "No messages were successfully inserted for BOARD_ID: {0}", boardId);
+            }
+            
         } else {
-            LOGGER.log(Level.SEVERE, "Failed to get or create BOARD_ID for loginId: {0}. Cannot insert message.", loginId);
+            LOGGER.log(Level.SEVERE, "Failed to get or create BOARD_ID for loginId: {0}. Cannot insert messages.", loginId);
         }
         
     } catch (SQLException ex) {
-        LOGGER.log(Level.SEVERE, "SQL Exception occurred in postDisplayMessage: {0}", ex.getMessage());
+        LOGGER.log(Level.SEVERE, "SQL Exception occurred in postDisplayMessages: {0}", ex.getMessage());
         LOGGER.log(Level.SEVERE, ex.getMessage(), ex);
         ExceptionUtils.printRootCauseStackTrace(ex);
     } catch (Exception ex) {
-        LOGGER.log(Level.SEVERE, "General Exception occurred in postDisplayMessage: {0}", ex.getMessage());
+        LOGGER.log(Level.SEVERE, "General Exception occurred in postDisplayMessages: {0}", ex.getMessage());
         LOGGER.log(Level.SEVERE, ex.getMessage(), ex);
         ExceptionUtils.printRootCauseStackTrace(ex);
     }
     
-    LOGGER.log(Level.INFO, "EXIT postDisplayMessage with result - BOARD_ID: {0}, MESSAGE_DETAIL_ID: {1}", 
-               new Object[]{boardId, messageDetailId});
+    LOGGER.log(Level.INFO, "EXIT postDisplayMessages with result - BOARD_ID: {0}, Total Messages Processed: {1}, Message Detail IDs: {2}", 
+               new Object[]{boardId, messageList.size(), messageDetailIds.toString()});
     
-    return boardId; // or return messageDetailId based on your needs
+    return boardId;
+}
+
+// Alternative approach: Single method that accepts both types using varargs
+@Override
+public Integer postDisplayMessage(String loginId, String... messages) {
+    LOGGER.log(Level.INFO, "ENTER postDisplayMessage (varargs) with {0} message(s), loginId: {1}", 
+               new Object[]{messages.length, loginId});
+    
+    // Convert varargs to list
+    List<String> messageList = Arrays.asList(messages);
+    
+    Integer result = postDisplayMessages(messageList, loginId);
+    
+    LOGGER.log(Level.INFO, "EXIT postDisplayMessage (varargs) with result: {0}", result);
+    return result;
 }
