@@ -293,18 +293,3 @@ public Integer postDisplayMessages(List<String> messageList, String loginId) {
     
     return boardId;
 }
-
-// Alternative approach: Single method that accepts both types using varargs
-@Override
-public Integer postDisplayMessage(String loginId, String... messages) {
-    LOGGER.log(Level.INFO, "ENTER postDisplayMessage (varargs) with {0} message(s), loginId: {1}", 
-               new Object[]{messages.length, loginId});
-    
-    // Convert varargs to list
-    List<String> messageList = Arrays.asList(messages);
-    
-    Integer result = postDisplayMessages(messageList, loginId);
-    
-    LOGGER.log(Level.INFO, "EXIT postDisplayMessage (varargs) with result: {0}", result);
-    return result;
-}
