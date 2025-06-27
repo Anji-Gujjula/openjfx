@@ -11,7 +11,6 @@ public Integer postDisplayMessages(List<String> messageList, String loginId) {
     }
 
     Integer boardId = null;
-    List<Integer> messageDetailIds = new ArrayList<>();
     LinkedHashMap<Integer, Object> parametersSet;
     Integer position;
     Timestamp userLogLoginTime = null;
@@ -25,7 +24,7 @@ public Integer postDisplayMessages(List<String> messageList, String loginId) {
     sqlGetUserLogTime.append(" ORDER BY LOGIN_TIME DESC ");
     sqlGetUserLogTime.append(" FETCH FIRST 1 ROWS ONLY ");
 
-    // FIXED: SQL to check if user already exists in DISPLAY_BOARD_TBL and get LATEST login time
+    // SQL to check if user already exists in DISPLAY_BOARD_TBL and get LATEST login time
     StringBuilder sqlCheckUser = new StringBuilder();
     sqlCheckUser.append(" SELECT BOARD_ID, LOGIN_TIME ");
     sqlCheckUser.append(" FROM AVS.DISPLAY_BOARD_TBL ");
@@ -51,11 +50,11 @@ public Integer postDisplayMessages(List<String> messageList, String loginId) {
     sqlGetLatestBoardId.append(" ORDER BY LOGIN_TIME DESC, BOARD_ID DESC ");
     sqlGetLatestBoardId.append(" FETCH FIRST 1 ROWS ONLY ");
 
-    // SQL to insert message in child table
+    // MODIFIED: SQL to insert message in child table with LINE_NUMBER
     StringBuilder sqlInsertMessage = new StringBuilder();
     sqlInsertMessage.append(" INSERT INTO AVS.DISPLAY_BOARD_MSG_DETAIL_TBL ");
-    sqlInsertMessage.append(" (MESSAGE_DETAIL_ID, BOARD_ID, DISPLAY_MESSAGE, DISPLAY_MESSAGE_DATE_TIME) ");
-    sqlInsertMessage.append(" VALUES (AVS.DISPLAY_BOARD_MSG_SEQ.NEXTVAL, ?, ?, SYSDATE) ");
+    sqlInsertMessage.append(" (MESSAGE_DETAIL_ID, BOARD_ID, DISPLAY_MESSAGE, LINE_NUMBER, DISPLAY_MESSAGE_DATE_TIME) ");
+    sqlInsertMessage.append(" VALUES (AVS.DISPLAY_BOARD_MSG_SEQ.NEXTVAL, ?, ?, ?, SYSDATE) ");
 
     try (Connection conn = avsDatasource.getConnection();
          PreparedStatement pStmtGetUserLogTime = conn.prepareStatement(sqlGetUserLogTime.toString());
@@ -191,61 +190,40 @@ public Integer postDisplayMessages(List<String> messageList, String loginId) {
             }
         }
 
-        // Step 4: Insert all messages from the list in child table as separate records
+        // Step 4: Insert all messages from the list in child table with LINE_NUMBER
         if (boardId != null) {
             LOGGER.log(Level.INFO, "Inserting {0} message(s) for BOARD_ID: {1}", 
                       new Object[]{messageList.size(), boardId});
             
             int successfulInserts = 0;
-            int messageCounter = 1;
+            int lineNumber = 1; // Start line numbering from 1
             
             for (String message : messageList) {
                 if (message != null && !message.trim().isEmpty()) {
-                    LOGGER.log(Level.INFO, "Inserting message {0}/{1} for BOARD_ID: {2} - Message: {3}", 
-                              new Object[]{messageCounter, messageList.size(), boardId, message});
+                    LOGGER.log(Level.INFO, "Inserting message at line {0} for BOARD_ID: {1} - Message: {2}", 
+                              new Object[]{lineNumber, boardId, message});
                     
                     parametersSet = new LinkedHashMap<>();
                     position = 1;
                     parametersSet.put(position++, boardId);
                     parametersSet.put(position++, message.trim());
+                    parametersSet.put(position++, lineNumber); // Add LINE_NUMBER parameter
                     DBHelper.setParametersFromMap(pStmtInsertMessage, parametersSet);
                     
                     int messageInsertCount = pStmtInsertMessage.executeUpdate();
                     
                     if (messageInsertCount > 0) {
                         successfulInserts++;
-                        LOGGER.log(Level.INFO, "Message {0} inserted successfully for BOARD_ID: {1}", 
-                                  new Object[]{messageCounter, boardId});
-                        
-                        // Optional: Get the message_detail_id for each inserted message
-                        String sqlGetMessageId = "SELECT MESSAGE_DETAIL_ID FROM AVS.DISPLAY_BOARD_MSG_DETAIL_TBL " +
-                                               "WHERE BOARD_ID = ? AND DISPLAY_MESSAGE = ? " +
-                                               "ORDER BY DISPLAY_MESSAGE_DATE_TIME DESC FETCH FIRST 1 ROWS ONLY";
-                        
-                        try (PreparedStatement pStmtGetMessageId = conn.prepareStatement(sqlGetMessageId)) {
-                            parametersSet = new LinkedHashMap<>();
-                            position = 1;
-                            parametersSet.put(position++, boardId);
-                            parametersSet.put(position++, message.trim());
-                            DBHelper.setParametersFromMap(pStmtGetMessageId, parametersSet);
-                            
-                            try (ResultSet rs = pStmtGetMessageId.executeQuery()) {
-                                if (rs.next()) {
-                                    Integer messageDetailId = rs.getInt("MESSAGE_DETAIL_ID");
-                                    messageDetailIds.add(messageDetailId);
-                                    LOGGER.log(Level.INFO, "Message {0} stored with MESSAGE_DETAIL_ID: {1}", 
-                                              new Object[]{messageCounter, messageDetailId});
-                                }
-                            }
-                        }
+                        LOGGER.log(Level.INFO, "Message at line {0} inserted successfully for BOARD_ID: {1}", 
+                                  new Object[]{lineNumber, boardId});
                     } else {
-                        LOGGER.log(Level.WARNING, "Failed to insert message {0} for BOARD_ID: {1} - Message: {2}", 
-                                  new Object[]{messageCounter, boardId, message});
+                        LOGGER.log(Level.WARNING, "Failed to insert message at line {0} for BOARD_ID: {1} - Message: {2}", 
+                                  new Object[]{lineNumber, boardId, message});
                     }
                 } else {
-                    LOGGER.log(Level.WARNING, "Skipping null or empty message at position {0}", messageCounter);
+                    LOGGER.log(Level.WARNING, "Skipping null or empty message at line {0}", lineNumber);
                 }
-                messageCounter++;
+                lineNumber++; // Increment line number for next message
             }
             
             LOGGER.log(Level.INFO, "Message insertion completed. Successfully inserted {0} out of {1} message(s) for BOARD_ID: {2}", 
@@ -269,8 +247,8 @@ public Integer postDisplayMessages(List<String> messageList, String loginId) {
         ExceptionUtils.printRootCauseStackTrace(ex);
     }
     
-    LOGGER.log(Level.INFO, "EXIT postDisplayMessages with result - BOARD_ID: {0}, Total Messages Processed: {1}, Message Detail IDs: {2}", 
-               new Object[]{boardId, messageList.size(), messageDetailIds.toString()});
+    LOGGER.log(Level.INFO, "EXIT postDisplayMessages with result - BOARD_ID: {0}, Total Messages Processed: {1}", 
+               new Object[]{boardId, messageList.size()});
     
     return boardId;
 }
